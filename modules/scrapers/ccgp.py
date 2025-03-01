@@ -92,8 +92,9 @@ class CCGPScraper(BaseScraper):
                                     if url and not url.startswith(('http://', 'https://')):
                                         url = urljoin(cls.BASE_URL, url)
                                     
-                                    # 如果标题或内容包含公司名，则视为匹配结果
-                                    if company in title or company in content:
+                                    # 使用改进的模糊匹配方法判断是否相关
+                                    if (cls.is_company_match(company, title) or 
+                                        cls.is_company_match(company, content)):
                                         results.append({
                                             '公司名称': company,
                                             '标题': title,
@@ -101,9 +102,15 @@ class CCGPScraper(BaseScraper):
                                             '内容摘要': content,
                                             '链接': url,
                                             '数据来源': cls.display_name,
-                                            '抓取时间': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                            '抓取时间': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                            '匹配度': 'high' if company in title or company in content else 'medium'
                                         })
                                         logger.info(f"找到匹配信息: {title}")
+                                        
+                                        # 可选：抓取详情页获取更多信息
+                                        # details = await cls.fetch_details(url, session, headers)
+                                        # if details:
+                                        #     results[-1].update(details)
                                 except Exception as e:
                                     logger.error(f"解析项目时出错: {str(e)}")
                             
@@ -123,6 +130,31 @@ class CCGPScraper(BaseScraper):
         
         logger.info(f"从中国政府采购网共抓取到 {len(results)} 条 {company} 的招投标信息")
         return results
+    
+    @classmethod
+    async def fetch_details(cls, url: str, session, headers) -> Dict[str, Any]:
+        """抓取详情页内容获取更多信息"""
+        details = {}
+        try:
+            async with session.get(url, headers=headers, timeout=10) as response:
+                if response.status == 200:
+                    html_text = await response.text()
+                    html = etree.HTML(html_text)
+                    
+                    # 提取更多字段，根据网站结构调整XPath
+                    project_id = "".join(html.xpath("//div[contains(text(), '项目编号')]/following-sibling::div[1]/text()")).strip()
+                    if project_id:
+                        details['项目编号'] = project_id
+                        
+                    buyer_name = "".join(html.xpath("//div[contains(text(), '采购人')]/following-sibling::div[1]/text()")).strip()
+                    if buyer_name:
+                        details['采购人'] = buyer_name
+                    
+                    # 添加更多字段...
+        except Exception as e:
+            logger.error(f"抓取详情页出错: {str(e)}")
+        
+        return details
 
     @classmethod
     @property
