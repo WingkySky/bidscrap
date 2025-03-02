@@ -73,6 +73,36 @@
 <body>
     <h1>招投标信息抓取结果</h1>
     
+    <!-- 在结果页面顶部添加 -->
+    {% if task_id and success == False %}
+    <div class="alert alert-info">
+        <h4>搜索正在进行中...</h4>
+        <p>系统正在处理您的搜索请求，请稍候...</p>
+        <div class="progress">
+            <div id="results-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+        </div>
+        <p id="refresh-message">页面将在 <span id="countdown">10</span> 秒后自动刷新</p>
+    </div>
+
+    <script>
+        // 自动刷新倒计时
+        let countdown = 10;
+        const countdownElement = document.getElementById('countdown');
+        
+        setInterval(function() {
+            countdown--;
+            countdownElement.textContent = countdown;
+            
+            if (countdown <= 0) {
+                window.location.reload();
+            }
+        }, 1000);
+        
+        // 也可以添加手动刷新按钮
+        document.getElementById('refresh-message').innerHTML += ' <button class="btn btn-sm btn-primary" onclick="window.location.reload()">立即刷新</button>';
+    </script>
+    {% endif %}
+    
     <div class="summary">
         {% if results %}
             <h2>共找到 {{ count }} 条招投标信息</h2>
@@ -120,6 +150,53 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
+
+    <!-- 在结果页添加搜索统计信息 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>搜索报告</h5>
+        </div>
+        <div class="card-body">
+            <h6>搜索参数</h6>
+            <p>日期范围: {{ search_params.start_date }} 至 {{ search_params.end_date }}</p>
+            
+            <h6>搜索公司 ({{ searched_companies|length }})</h6>
+            <ul>
+                {% for company in searched_companies %}
+                <li>
+                    <strong>{{ company }}</strong>
+                    <span class="badge bg-{{ search_stats[company].total > 0 and 'success' or 'danger' }}">
+                        找到 {{ search_stats[company].total }} 条记录
+                    </span>
+                    <ul>
+                        {% for source, count in search_stats[company].sources.items() %}
+                        <li>{{ source }}: {{ count }} 条记录</li>
+                        {% endfor %}
+                    </ul>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- 如果没有结果，显示建议 -->
+    {% if not success %}
+    <div class="alert alert-warning">
+        <h4>{{ error }}</h4>
+        <p>可能的原因:</p>
+        <ul>
+            <li>所选公司在该时间段内没有相关招投标信息</li>
+            <li>网站暂时无法访问或数据格式变更</li>
+            <li>搜索参数可能需要调整</li>
+        </ul>
+        <p>建议:</p>
+        <ul>
+            <li>尝试扩大日期范围</li>
+            <li>检查公司名称是否正确</li>
+            <li>稍后再试</li>
+        </ul>
+    </div>
     {% endif %}
 </body>
 </html> 

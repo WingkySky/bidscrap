@@ -45,6 +45,10 @@ class CCGPScraper(AbstractScraper):
         }
     }
     
+    # 设置特定爬虫的超时时间
+    request_timeout = 15  # 每个HTTP请求的超时时间(秒)
+    scraper_timeout = 120  # 整个爬虫的最大执行时间(秒)
+    
     @classmethod
     @property
     def name(cls) -> str:

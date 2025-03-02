@@ -115,6 +115,21 @@
     <main class="container">
         <!-- 搜索区域 -->
         <div class="search-container">
+            <div id="loading-indicator" style="display:none;">
+                <div class="text-center my-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在搜索招投标信息，请稍候...</p>
+                    <div id="search-progress">
+                        <p id="current-company">准备开始搜索...</p>
+                        <div class="progress mb-3">
+                            <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
+                        </div>
+                        <!-- 日志容器会动态创建在这里 -->
+                    </div>
+                </div>
+            </div>
             <form id="search-form" action="/scrape" method="post" enctype="multipart/form-data">
                 <!-- 搜索框 -->
                 <div class="row align-items-center">
@@ -129,7 +144,7 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <button type="submit" class="btn search-btn w-100">
+                        <button type="submit" class="btn search-btn w-100" onclick="showLoading()">
                             <i class="bi bi-search me-2"></i>开始搜索
                         </button>
                     </div>
@@ -293,10 +308,41 @@
             
             // 表单提交验证
             document.getElementById('search-form').addEventListener('submit', function(e) {
+                e.preventDefault();  // 阻止默认提交
+                
                 if (searchTerms.length === 0) {
-                    e.preventDefault();
                     alert('请至少添加一个企业名称或关键词');
+                    return;
                 }
+                
+                // 显示加载指示器
+                document.getElementById('loading-indicator').style.display = 'block';
+                document.querySelector('button[type="submit"]').disabled = true;
+                
+                // 通过AJAX提交表单
+                const formData = new FormData(this);
+                
+                fetch('/scrape_with_progress', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.task_id) {
+                        // 开始监听进度
+                        monitorSearchProgress(data.task_id);
+                    } else {
+                        alert('启动搜索失败');
+                        document.getElementById('loading-indicator').style.display = 'none';
+                        document.querySelector('button[type="submit"]').disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('请求失败，请检查网络连接');
+                    document.getElementById('loading-indicator').style.display = 'none';
+                    document.querySelector('button[type="submit"]').disabled = false;
+                });
             });
         });
 
@@ -454,6 +500,73 @@
                     progressContainer.classList.add('d-none');
                 }, 1000);
             }
+        }
+
+        function showLoading() {
+            // 显示加载指示器
+            document.getElementById('loading-indicator').style.display = 'block';
+            
+            // 禁用提交按钮防止重复提交
+            document.querySelector('button[type="submit"]').disabled = true;
+            
+            // 表单验证通过后提交
+            return true;
+        }
+
+        // 监控搜索进度
+        function monitorSearchProgress(taskId) {
+            const progressBar = document.getElementById('progress-bar');
+            const currentCompanyElement = document.getElementById('current-company');
+            const logContainer = document.createElement('div');
+            logContainer.className = 'log-container mt-3 small text-muted';
+            document.getElementById('search-progress').appendChild(logContainer);
+            
+            // 使用EventSource监听服务器发送的事件
+            const eventSource = new EventSource(`/search_progress_stream/${taskId}`);
+            
+            eventSource.onmessage = function(event) {
+                const progress = JSON.parse(event.data);
+                
+                // 更新进度条
+                const percent = Math.round((progress.processed_companies / progress.total_companies) * 100);
+                progressBar.style.width = `${percent}%`;
+                progressBar.textContent = `${percent}%`;
+                
+                // 更新当前公司
+                currentCompanyElement.textContent = `正在搜索: ${progress.current_company} (${progress.processed_companies + 1}/${progress.total_companies})`;
+                
+                // 添加最新日志
+                if (progress.log && progress.log.length > 0) {
+                    const lastLog = progress.log[progress.log.length - 1];
+                    const logEntry = document.createElement('div');
+                    logEntry.textContent = lastLog;
+                    logContainer.appendChild(logEntry);
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+                
+                // 搜索完成时
+                if (progress.status === 'completed' || progress.status === 'error') {
+                    eventSource.close(); // 关闭事件流
+                    
+                    if (progress.status === 'completed') {
+                        // 重定向到结果页
+                        window.location.href = `/search_results/${taskId}`;
+                    } else {
+                        // 显示错误
+                        alert(`搜索出错: ${progress.error}`);
+                        document.getElementById('loading-indicator').style.display = 'none';
+                        document.querySelector('button[type="submit"]').disabled = false;
+                    }
+                }
+            };
+            
+            eventSource.onerror = function() {
+                console.error('EventSource failed');
+                eventSource.close();
+                alert('监控搜索进度失败，请刷新页面重试');
+                document.getElementById('loading-indicator').style.display = 'none';
+                document.querySelector('button[type="submit"]').disabled = false;
+            };
         }
     </script>
 </body>

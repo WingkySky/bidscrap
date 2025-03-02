@@ -43,6 +43,10 @@ class AbstractScraper(BaseScraper, ABC):
         }
     }
     
+    # 添加默认超时设置
+    request_timeout = 10  # 每个HTTP请求的超时时间(秒)
+    scraper_timeout = 60  # 整个爬虫的最大执行时间(秒)
+    
     @classmethod
     async def scrape(cls, company: str, start_date: str, end_date: str, **kwargs) -> List[Dict[str, Any]]:
         """基于配置执行爬取"""
@@ -259,3 +263,21 @@ class AbstractScraper(BaseScraper, ABC):
             requests.Session: 配置好的请求会话对象
         """
         pass 
+
+    @classmethod
+    async def make_request(cls, url, method="GET", session=None, **kwargs):
+        """发送HTTP请求"""
+        try:
+            # 设置请求超时时间
+            kwargs.setdefault("timeout", cls.request_timeout)
+            
+            # 发送请求
+            if method.upper() == "GET":
+                response = session.get(url, **kwargs)
+            else:
+                response = session.post(url, **kwargs)
+            
+            return response.status_code, response.text
+        except Exception as e:
+            logger.error(f"请求出错: {str(e)}")
+            return 0, None 

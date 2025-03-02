@@ -2,12 +2,7 @@
 import datetime
 
 # 目标公司列表
-TARGET_COMPANIES = [
-    "华为技术有限公司",
-    "腾讯科技（深圳）有限公司",
-    "阿里巴巴集团控股有限公司",
-    # 可根据需要添加更多公司
-]
+TARGET_COMPANIES = []  # 清空默认列表
 
 # 招投标信息网站配置
 TENDER_WEBSITES = [
