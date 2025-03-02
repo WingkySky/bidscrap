@@ -1,6 +1,8 @@
 """中国政府采购网爬虫"""
 from modules.scrapers.abstract_scraper import AbstractScraper
 from modules.scrapers import register_scraper
+import requests
+from fake_useragent import UserAgent
 
 @register_scraper
 class CCGPScraper(AbstractScraper):
@@ -82,3 +84,22 @@ class CCGPScraper(AbstractScraper):
             "timeType": "6",  # 时间类型：6表示发布日期
             "displayZone": kwargs.get("location", ""),
         } 
+    
+    @classmethod
+    def create_session(cls) -> requests.Session:
+        """
+        创建并配置中国政府采购网专用的请求会话
+        
+        Returns:
+            requests.Session: 配置好的请求会话对象
+        """
+        session = requests.Session()
+        # 设置随机User-Agent
+        ua = UserAgent()
+        session.headers.update({
+            'User-Agent': ua.random,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+            'Connection': 'keep-alive',
+        })
+        return session 

@@ -268,107 +268,29 @@ class BaseScraper(ABC):
         return session
     
     @classmethod
-    async def make_request(cls, 
-                         url: str, 
-                         method: str = 'GET', 
-                         session: aiohttp.ClientSession = None,
-                         params: dict = None,
-                         data: dict = None,
-                         json_data: dict = None,
-                         use_proxy: bool = True,
-                         rate_limit: float = 1.0,  # 每秒请求次数限制
-                         retry_on_status: List[int] = None,
-                         **kwargs) -> Tuple[int, Any]:
-        """发送HTTP请求，带有重试、代理和频率限制"""
-        if retry_on_status is None:
-            retry_on_status = [403, 429, 500, 502, 503, 504]
-            
-        # 限制请求频率
-        current_time = datetime.now()
-        elapsed = (current_time - cls.last_request_time).total_seconds()
-        min_interval = 1.0 / rate_limit
-        
-        if elapsed < min_interval:
-            delay = min_interval - elapsed
-            logger.debug(f"限制请求频率，等待 {delay:.2f} 秒...")
-            await asyncio.sleep(delay)
-        
-        # 创建或使用现有会话
-        should_close_session = False
-        if session is None:
-            session = await cls.get_session(use_proxy=use_proxy)
-            should_close_session = True
-        
+    async def make_request(cls, url, method="GET", session=None, **kwargs):
+        """发送HTTP请求"""
         try:
-            proxy = getattr(session, '_proxy', None) if use_proxy else None
-            
-            # 记录请求
-            cls.request_count += 1
-            cls.last_request_time = datetime.now()
-            
-            retry_count = 0
-            while retry_count <= cls.retry_strategy.max_retries:
-                try:
-                    # 随机延迟，模拟人类行为
-                    await asyncio.sleep(random.uniform(0.1, 0.5))
-                    
-                    # 构建请求参数
-                    request_kwargs = {
-                        'params': params,
-                        'data': data,
-                        'json': json_data,
-                        'proxy': proxy,
-                        'timeout': aiohttp.ClientTimeout(total=30),
-                        **kwargs
+            # 如果有代理配置但使用的是错误的参数名
+            if "proxy" in kwargs:
+                # 将proxy参数转换为正确的proxies参数
+                proxy_url = kwargs.pop("proxy")
+                if proxy_url:
+                    kwargs["proxies"] = {
+                        "http": proxy_url,
+                        "https": proxy_url
                     }
-                    
-                    # 发送请求
-                    async with getattr(session, method.lower())(url, **request_kwargs) as response:
-                        status = response.status
-                        
-                        # 处理成功响应
-                        if 200 <= status < 300:
-                            if 'json' in response.content_type.lower():
-                                return status, await response.json()
-                            else:
-                                return status, await response.text()
-                        
-                        # 处理需要重试的状态码
-                        if status in retry_on_status:
-                            logger.warning(f"请求 {url} 返回状态码 {status}，准备重试 ({retry_count+1}/{cls.retry_strategy.max_retries})")
-                            
-                            # 如果是IP被封，标记代理为失效
-                            if status in [403, 429] and proxy:
-                                cls.proxy_manager.mark_proxy_banned(proxy)
-                                # 获取新代理
-                                proxy = await cls.proxy_manager.get_proxy()
-                                
-                            retry_count += 1
-                            await cls.retry_strategy.sleep(retry_count)
-                            continue
-                        
-                        # 其他状态码直接返回
-                        return status, await response.text()
-                        
-                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                    logger.warning(f"请求 {url} 出错: {str(e)}，准备重试 ({retry_count+1}/{cls.retry_strategy.max_retries})")
-                    retry_count += 1
-                    
-                    # 可能是代理问题，尝试更换代理
-                    if proxy:
-                        cls.proxy_manager.mark_proxy_banned(proxy)
-                        proxy = await cls.proxy_manager.get_proxy()
-                        
-                    await cls.retry_strategy.sleep(retry_count)
-                    continue
-                    
-            # 所有重试都失败
-            logger.error(f"请求 {url} 失败，已达到最大重试次数")
-            return 0, None
             
-        finally:
-            if should_close_session:
-                await session.close()
+            # 发送请求
+            if method.upper() == "GET":
+                response = session.get(url, **kwargs)
+            else:
+                response = session.post(url, **kwargs)
+            
+            return response.status_code, response.text
+        except Exception as e:
+            logger.error(f"请求出错: {str(e)}")
+            return 0, None
     
     @classmethod
     async def handle_captcha(cls, session, url, image_selector=".captcha-image", 

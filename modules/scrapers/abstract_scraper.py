@@ -4,7 +4,8 @@ import asyncio
 import random
 from typing import Dict, List, Any, Optional, Callable, Type
 from lxml import etree
-from abc import ABC
+from abc import ABC, abstractmethod
+import requests
 
 from modules.scrapers.base import BaseScraper
 
@@ -46,6 +47,7 @@ class AbstractScraper(BaseScraper, ABC):
     async def scrape(cls, company: str, start_date: str, end_date: str, **kwargs) -> List[Dict[str, Any]]:
         """基于配置执行爬取"""
         logger.info(f"开始从{cls.display_name}抓取 {company} 的招投标信息")
+        logger.info(f"准备搜索的公司名称: '{company}'")
         
         # 准备搜索参数
         search_params = cls.prepare_search_params(company, start_date, end_date, **kwargs)
@@ -53,7 +55,10 @@ class AbstractScraper(BaseScraper, ABC):
         seen_urls = set()
         
         try:
-            async with cls.create_session() as session:
+            # 创建会话但不使用异步上下文管理器
+            session = cls.create_session()
+            
+            try:
                 # 分页爬取
                 for page in range(1, cls.site_config.get("max_pages", 5) + 1):
                     # 更新页码
@@ -84,6 +89,9 @@ class AbstractScraper(BaseScraper, ABC):
                     
                     # 频率控制
                     await cls.rate_limit_sleep()
+            finally:
+                # 确保关闭会话
+                session.close()
         
         except Exception as e:
             logger.error(f"爬取过程出错: {str(e)}")
@@ -240,3 +248,14 @@ class AbstractScraper(BaseScraper, ABC):
         if cls.site_config.get("base_url"):
             return f"{cls.site_config['base_url'].rstrip('/')}/{url.lstrip('/')}"
         return url 
+
+    @classmethod
+    @abstractmethod
+    def create_session(cls) -> requests.Session:
+        """
+        创建并配置一个新的请求会话
+        
+        Returns:
+            requests.Session: 配置好的请求会话对象
+        """
+        pass 

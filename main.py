@@ -37,6 +37,9 @@ module_manager.discover_modules()
 from modules.api import router
 app.include_router(router)
 
+# 示例代码，检查是否有类似这样的内容
+default_companies = ["腾讯科技（深圳）有限公司", "阿里巴巴集团控股有限公司"]
+
 @app.on_event("startup")
 async def startup_event():
     """应用启动时执行"""
